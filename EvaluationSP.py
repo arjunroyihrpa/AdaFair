@@ -11,7 +11,7 @@ from sklearn.model_selection import ShuffleSplit, StratifiedKFold
 
 from AdaFairSP import AdaFairSP
 from SMOTEBoost import SMOTEBoost
-
+from margin import *
 matplotlib.use('Agg')
 import sys
 
@@ -113,6 +113,32 @@ def run_eval(dataset, iterations):
     plot_my_results_sp(results, suffixes, "Images/StatisticalParity/" + dataset, dataset)
     delete_temp_files(dataset, suffixes)
 
+
+def svmRBLearner(train, protectedIndex, protectedValue):
+    marginAnalyzer = svmRBFMarginAnalyzer(train, protectedIndex, protectedValue)
+    shift = marginAnalyzer.optimalShift()
+    print('best shift is: %r' % (shift,))
+    return marginAnalyzer.conditionalShiftClassifier(shift)
+
+def boostLearner(train, protectedIndex, protectedValue):
+    marginAnalyzer = boostingMarginAnalyzer(train, protectedIndex, protectedValue)
+    shift = marginAnalyzer.optimalShift()
+    print('best shift is: %r' % (shift,))
+    return marginAnalyzer.conditionalShiftClassifier(shift)
+
+def svmLLearner(train, protectedIndex, protectedValue):
+    marginAnalyzer = svmLinearMarginAnalyzer(train, protectedIndex, protectedValue)
+    shift = marginAnalyzer.optimalShift()
+    print('best shift is: %r' % (shift,))
+    return marginAnalyzer.conditionalShiftClassifier(shift)
+    
+def lrLearner(train, protectedIndex, protectedValue):
+    marginAnalyzer = lrSKLMarginAnalyzer(train, protectedIndex, protectedValue)
+    shift = marginAnalyzer.optimalShift()
+    print('best shift is: %r' % (shift,))
+    return marginAnalyzer.conditionalShiftClassifier(shift)
+
+
 def train_classifier(X_train, X_test, y_train, y_test, sa_index, p_Group, dataset, mutex, mode, base_learners, c):
     if mode == 0:
         classifier = AdaCostClassifier(saIndex=sa_index, saValue=p_Group, n_estimators=base_learners, CSB="CSB1")
@@ -120,10 +146,27 @@ def train_classifier(X_train, X_test, y_train, y_test, sa_index, p_Group, datase
         classifier = AdaFairSP(n_estimators=base_learners, saIndex=sa_index, saValue=p_Group, CSB="CSB2", c=c)
     elif mode == 2:
         classifier = SMOTEBoost(n_estimators=base_learners,saIndex=sa_index,n_samples=10, saValue=p_Group,  CSB="CSB1" )
-    classifier.fit(X_train, y_train)
+    else:
+        train=[]
+        for i in range(len(X_train)):
+              train.append((X_train[i],y_train[i]))
+        if mode==3:
+             classifier = lrLearner(train, sa_index, p_Group)
+        elif mode==4:
+             classifier = svmRBLearner(train, sa_index, p_Group)
+        elif mode==5:
+             classifier = svmLLearner(train, sa_index, p_Group)
+        elif mode==6:
+             classifier = boostLearner(train, sa_index, p_Group)
+    
+    if  mode in [0,1,2]:      
+          classifier.fit(X_train, y_train)
+          y_pred_probs = classifier.predict_proba(X_test)[:, 1]
+          y_pred_labels = classifier.predict(X_test)
 
-    y_pred_probs = classifier.predict_proba(X_test)[:, 1]
-    y_pred_labels = classifier.predict(X_test)
+    else:
+        y_pred_labels=[classifier(x) for x in X_test]
+        y_pred_probs=[0 for i in y_pred_labels]
 
     mutex.acquire()
     infile = open(dataset, 'rb')
