@@ -11,7 +11,7 @@ from sklearn.model_selection import ShuffleSplit, StratifiedKFold
 
 from AdaFairSP import AdaFairSP
 from SMOTEBoost import SMOTEBoost
-from margin import *
+from margin_n import *
 matplotlib.use('Agg')
 import sys
 
@@ -21,14 +21,14 @@ import time
 
 from AdaCost import AdaCostClassifier
 
-from load_dutch_data import load_dutch_data
-from load_compas_data import load_compas
-from load_adult import load_adult
-from load_diabetes import load_diabetes
-from load_credit import load_credit
-from load_kdd import load_kdd
+from DataPreprocessing.load_dutch_data import load_dutch_data
+from DataPreprocessing.load_compas_data import load_compas
+from DataPreprocessing.load_adult import load_adult
+from DataPreprocessing.load_diabetes import load_diabetes
+from DataPreprocessing.load_credit import load_credit
+from DataPreprocessing.load_kdd import load_kdd
 
-from load_bank import load_bank
+from DataPreprocessing.load_bank import load_bank
 from my_useful_functions import calculate_performance_SP, plot_my_results_sp
 
 
@@ -94,7 +94,7 @@ def run_eval(dataset, iterations):
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y[train_index], y[test_index]
 
-            for proc in range(0, 3):
+            for proc in range(0, 4):
                 threads.append(Process(target=train_classifier, args=( X_train, X_test, y_train, y_test, sa_index, p_Group, dataset + suffixes[proc], mutex[proc],proc, 200, 1)))
 
     for process in threads:
@@ -115,8 +115,8 @@ def run_eval(dataset, iterations):
 
 
 
-def boostLearner(train, protectedIndex, protectedValue):
-    marginAnalyzer = boostingMarginAnalyzer(train, protectedIndex, protectedValue)
+def boostLearner(train, protectedIndex, protectedValue,numRounds=20):
+    marginAnalyzer = boostingMarginAnalyzer(train, protectedIndex, protectedValue,numRounds=numRounds)
     shift = marginAnalyzer.optimalShift()
     print('best shift is: %r' % (shift,))
     return marginAnalyzer.conditionalShiftClassifier(shift)
@@ -134,7 +134,7 @@ def train_classifier(X_train, X_test, y_train, y_test, sa_index, p_Group, datase
         train=[]
         for i in range(len(X_train)):
               train.append((X_train[i],y_train[i]))
-        classifier = boostLearner(train, sa_index, p_Group)
+        classifier = boostLearner(train, sa_index, p_Group,numRounds=5)
     
     if  mode in [0,1,2]:      
           classifier.fit(X_train, y_train)
